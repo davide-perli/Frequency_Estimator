@@ -1,26 +1,26 @@
 import numpy as np
 from scipy.fftpack import dct
 
-_ESTIMATORS = {"gaussian", "naive_bayes"}
-
 class FrequencyEstimator():
 
+    """
+        INFO ON PARAMETERS
+        length is the length of the DCT (important if input is of varying length. Set based on the length of you input)
+        if n < len(input) the input is truncated if n > len(input) input is zero-padded. If you don't want to lose information we recommend a higher value for length
+        if a float value is passed it will be converted to an integer
+        !!!Length is not the same with reduciton_rate. Length may shorten/pad input, while n_components reduces the resulted DCT signal
+
+        n_components will reduce the DCT by a given number of points
+        if a float value is passed it will be converted to an integer
+
+        if normalization is set to true DCT will use norm='ortho'
+
+        estimators can be one element or more. If more are passed the decission will be based on the average of each estimator. Defaul gaussian
+    """
+
+    _ESTIMATORS = {"gaussian", "naive_bayes"}
+
     def __init__(self, length=None, n_components=None, normalization=False, estimators = None, reg=1e-2):
-
-        """
-            INFO ON PARAMETERS
-            length is the length of the DCT (important if input is of varying length. Set based on the length of you input)
-            if n < len(input) the input is truncated if n > len(input) input is zero-padded. If you don't want to lose information we recommend a higher value for length
-            if a float value is passed it will be converted to an integer
-            !!!Length is not the same with reduciton_rate. Length may shorten/pad input, while n_components reduces the resulted DCT signal
-
-            n_components will reduce the DCT by a given number of points
-            if a float value is passed it will be converted to an integer
-
-            if normalization is set to true DCT will use norm='ortho'
-
-            estimators can be one element or more. If more are passed the decission will be based on the average of each estimator. Defaul gaussian
-        """
         
         if length is not None: 
             if not isinstance(length, (int, float, np.integer, np.floating)) or length <= 0 or not np.isfinite(length):
@@ -28,14 +28,12 @@ class FrequencyEstimator():
         if n_components is not None:
             if not isinstance(n_components, (int, float)) or n_components <= 0 or not np.isfinite(n_components):
                 raise TypeError("n_components must be a finite positive number or None!")
-        if not isinstance(normalization, bool):
+        if not isinstance(normalization, (bool, np.bool_)):
             raise TypeError("normalization must be a boolean!")
-        if estimators is not None and not isinstance(estimators, set):
-            raise TypeError("Estimators must be a set!")
         if isinstance(reg, (bool, np.bool_)) or not np.isfinite(reg) or reg <= 0: 
             raise ValueError("reg must be a finite positive number!")
         if estimators is None:
-            selected_estimators = {"gaussin"}
+            selected_estimators = {"gaussian"}
         else:
             if not isinstance(estimators, (set, frozenset)):
                 raise TypeError("estimators must be a set or frozentset of strings!")
