@@ -21,10 +21,7 @@ class FrequencyEstimator():
 
             estimators can be one element or more. If more are passed the decission will be based on the average of each estimator. Defaul gaussian
         """
-
-        # INPUT NOT VALIDATED YET
-        # if not isinstance(input, np.ndarray):
-        #     raise TypeError("input must be an numpy.ndarray!")
+        
         if length is not None: 
             if not isinstance(length, (int, float, np.integer, np.floating)) or length <= 0 or not np.isfinite(length):
                 raise TypeError("length must be a finite positive integer, float None!")
@@ -68,11 +65,17 @@ class FrequencyEstimator():
         X = np.asarray(X)
 
         if X.ndim != 3:
-            raise ValueError("The input vector must contain samples, features and n_components")
+            raise ValueError("X must have shape\n(n_samples, n_features, signal_length)")
+        if any(size == 0 for size in X.shape):
+            raise ValueError("X must not contain empty dimensions.")
+        if not np.all(np.isfinite(X)):
+            raise ValueError("X must contain only finite values.")
 
         X_dct = self.transform_to_dct(X)
 
         if self._n_components is not None:
+            if self._n_components > X_dct.shape[-1]:
+                raise ValueError("n_components exceeds the available coefficient count.")
             X_dct = X_dct[:, :, :self._n_components]
 
         return X_dct
