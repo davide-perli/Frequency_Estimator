@@ -60,7 +60,10 @@ class FrequencyEstimator():
         return signal
 
     def _prepare_features(self, X):
-        X = np.asarray(X)
+        try:
+            X = np.asarray(X, dtype=float)
+        except (TypeError, ValueError) as e:
+            raise TypeError("X must contain numerical data.") from e
 
         if X.ndim != 3:
             raise ValueError("X must have shape\n(n_samples, n_features, signal_length)")
@@ -92,71 +95,114 @@ class FrequencyEstimator():
         if len(y) == 0:
             raise ValueError("Cannot fit on an empty dataset.")
 
-        self._classes = np.unique(y)
+        self._classes, counts = np.unique(y, return_counts=True)
+        self._class_priors = {c: np.log(count / len(y)) for c, count in zip(self._classes, counts)}
 
-        n_features = X_dct.shape[1]
-        self._means = {feature:{} for feature in range(n_features)}
-        self._covariances = {feature:{} for feature in range(n_features)}
+        self._n_features = X_dct.shape[1]
+        self._n_coefficients = X_dct.shape[2]
 
-        for feature in range(n_features):
+        self._parameters = {estimator:{} for estimator in self._estimators}
 
-            feature_data = X_dct[:, feature, :]
+        for estimator in self._estimators:
+            for feature in range(self._n_features):
+                self._parameters[estimator][feature] = {}
+                feature_data = X_dct[:, feature, :]
 
-            for c in self._classes:
+                for c in self._classes:
 
-                X_c = feature_data[y == c]
-                mean = np.mean(X_c, axis=0)
-                centered = X_c - mean
+                    X_c = feature_data[y == c]
+                    mean = np.mean(X_c, axis=0)
+                    parameters = {"mean": mean}
 
-                covariance = (centered.T @ centered) / len(X_c)
+                    if estimator == "gaussian":
+                        centered = X_c - mean
 
-                self._means[feature][c] = mean
-                self._covariances[feature][c] = covariance
+                        covariance = (centered.T @ centered) / len(X_c)
+
+                        parameters["covariance"] = covariance
+
+                    elif estimator == "naive_bayes":
+                        variance = np.var(X_c, axis=0, ddof=0)
+                        parameters["variance"] = variance
+
+                    self._parameters[estimator][feature][c] = parameters
 
         return self
 
-    def _feature_log_likelihood(self, x, feature, c):
-        mean = self._means[feature][c]
+    def _gaussian_log_likelihood(self, x, parameters):
+        mean = parameters["mean"]
         diff = x - mean
-        covariance = self._covariances[feature][c] + self._reg * np.eye(len(mean))
+        covariance = parameters["covariance"] + self._reg * np.eye(len(mean))
         sign, logdet = np.linalg.slogdet(covariance)
-        inverse = np.linalg.inv(covariance)
-        log_likelihood = -0.5 * (diff.T @ inverse @ diff + logdet + len(mean) * np.log(2 * np.pi))
-
-        # print(f"\nClass: {c}, Feature: {feature}") 
-        # print("Mean:", mean) 
-        # print("Covariance diagonal:", np.diag(covariance)) 
-        # print("Sign:", sign) 
-        # print("Log determinant:", logdet) 
-        # print("Log likelihood:", log_likelihood)
+        if sign <= 0:
+            raise np.linalg.LinAlgError("Regularized covariance is not positive definite.")
+        
+        solved = np.linalg.solve(covariance, diff)
+        quadratic = diff @ solved
+        log_likelihood = -0.5 * (quadratic + logdet + len(mean) * np.log(2 * np.pi))
         return log_likelihood
 
+    def _naive_bayes_log_likelihood(self, x, parameters):
+        """Sum independent univariate Gaussian log-densities."""
+        mean = parameters["mean"]
+        variance = parameters["variance"] + self._reg
+        log_likelihood = -0.5 * np.sum(np.log(2 * np.pi * variance) + (x - mean) ** 2 / variance)
+        return log_likelihood
+
+    def _estimator_log_scores(self, X_dct, estimator):
+        n_samples = X_dct.shape[0]
+        n_classes = len(self._classes)
+        scores = np.zeros((n_samples, n_classes))
+
+        for sample_index, sample in enumerate(X_dct):
+            for class_index, c in enumerate(self._classes):
+                total = self._class_priors[c] # begin with class priors
+
+                for feature in range(self._n_features):
+                    x_feature = sample[feature]
+                    parameters = self._parameters[estimator][feature][c]
+
+                    if estimator == "gaussian":
+                        log_likelihood = self._gaussian_log_likelihood(x_feature, parameters)
+                    else:
+                        log_likelihood = self._naive_bayes_log_likelihood(x_feature, parameters)
+
+                    total += log_likelihood
+                scores[sample_index, class_index] = total
+        return scores
+
+    @staticmethod
+    def _softmax(scores):
+        scores = scores - np.max(scores, axis=1, keepdims=True)
+        probabilities = np.exp(scores)
+
+        return probabilities / np.sum(probabilities, axis=1, keepdims=True)
+
+    def _predict_probabilities(self, X):
+        if self._classes is None:
+            raise RuntimeError("Call fit() before prediction!")
+
+        X_dct = self._prepare_features(X)
+
+        if X_dct.shape[1] != self._n_features:
+            raise ValueError("Prediction data has a different number of features compared to the training data.")
+        if X_dct.shape[2] != self._n_coefficients:
+            raise ValueError("Prediction data has a different number of DCT coefficients compared to the training data.")
+
+        estimator_probabilities = []
+
+        for estimator in self._estimators:
+            log_scores = self._estimator_log_scores(X_dct, estimator)
+            probabilities = self._softmax(log_scores)
+            estimator_probabilities.append(probabilities)
+
+        return np.mean(estimator_probabilities, axis=0)
 
     def predict(self, X):
 
-        X_dct = self._prepare_features(X)
-        predictions = []
+        probabilities = self._predict_probabilities(X)
 
-        for x in X_dct:
-
-            likelihoods = {}
-
-            for c in self._classes:
-
-                total_log_likelihood = 0
-
-                for feature in range(X_dct.shape[1]):
-                
-                    feature_value = x[feature]
-                    feature_log_likelihood = self._feature_log_likelihood(feature_value, feature, c)
-                    total_log_likelihood += feature_log_likelihood
-                likelihoods[c] = total_log_likelihood
-
-            print("Classes:", self._classes)
-            print("Likelihoods:", likelihoods)
-            predictions.append(max(likelihoods, key=likelihoods.get))
-
-        return np.asarray(predictions)
+        return self._classes[np.argmax(probabilities, axis=1)]
 
     def evaluate():
         pass
@@ -176,6 +222,12 @@ X = np.asarray([
         [3, 7, 2, 8, -1, 4, 6],    # feature 1
     ],
 ])
+
+X_test =  np.asarray([[
+    [1, 5, 8, 0, 13, -5, 4],
+    [2, 4, 7, 1, 12, -4, 3]
+]])
+
 y = np.asarray([
     "TRUE",
     "TRUE",
@@ -184,16 +236,16 @@ y = np.asarray([
 
 model = FrequencyEstimator(
     length=7,
-    normalization=True
+    normalization=True,
+    estimators={"gaussian", "naive_bayes"}
 )
 
 model.fit(X, y)
 
-prediction = model.predict(
-    np.asarray([[
-    [1, 5, 8, 0, 13, -5, 4],
-    [2, 4, 7, 1, 12, -4, 3]
-]])
-)
+print("Classes:", model._classes)
+print("Predictions:", model.predict(X_test))
+print("Probabilities:", model._predict_probabilities(X_test))
+
+prediction = model.predict(X_test)
 
 print(prediction)
