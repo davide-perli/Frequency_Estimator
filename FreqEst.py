@@ -1,13 +1,11 @@
-import numpy as np, inspect
+import numpy as np
 from scipy.fftpack import dct
 
-class TransformToFrequency():
-    def __init__(self):
-        pass
+_ESTIMATORS = {"gaussian", "naive_bayes"}
 
 class FrequencyEstimator():
 
-    def __init__(self, length=None, n_components=None, normalization=False, estimators: set[str] | None = None, reg=1e-2):
+    def __init__(self, length=None, n_components=None, normalization=False, estimators = None, reg=1e-2):
 
         """
             INFO ON PARAMETERS
@@ -27,24 +25,36 @@ class FrequencyEstimator():
         # INPUT NOT VALIDATED YET
         # if not isinstance(input, np.ndarray):
         #     raise TypeError("input must be an numpy.ndarray!")
-        if length is not None and not isinstance(length, (int, float)):
-            raise TypeError("length must be an integer, float None!")
+        if length is not None: 
+            if not isinstance(length, (int, float, np.integer, np.floating)) or length <= 0 or not np.isfinite(length):
+                raise TypeError("length must be a finite positive integer, float None!")
         if n_components is not None:
-            if not isinstance(n_components, (int, float)) or n_components <= 0:
-                raise TypeError("n_components must be a positive number or None!")
+            if not isinstance(n_components, (int, float)) or n_components <= 0 or not np.isfinite(n_components):
+                raise TypeError("n_components must be a finite positive number or None!")
         if not isinstance(normalization, bool):
             raise TypeError("normalization must be a boolean!")
         if estimators is not None and not isinstance(estimators, set):
             raise TypeError("Estimators must be a set!")
-        if estimators is not None and not all(isinstance(value, str) for value in estimators):
-            raise TypeError("Values for estimator must be strings!")
-        if (isinstance(reg, (bool, np.bool_)) or not np.isfinite(reg) or reg <= 0 ): 
-            raise ValueError("reg must be a finite positive number.")
+        if isinstance(reg, (bool, np.bool_)) or not np.isfinite(reg) or reg <= 0: 
+            raise ValueError("reg must be a finite positive number!")
+        if estimators is None:
+            selected_estimators = {"gaussin"}
+        else:
+            if not isinstance(estimators, (set, frozenset)):
+                raise TypeError("estimators must be a set or frozentset of strings!")
+            if not all(isinstance(estimator, str) for estimator in estimators):
+                raise TypeError("estimators must contain only strings!")
+            selected_estimators = set(estimators)
+        unsupported_estimators = selected_estimators - self._ESTIMATORS
+
+        if unsupported_estimators:
+            raise TypeError("Unsupported estimators!")
+
 
         self._length = int(length) if length is not None else None
         self._n_components = int(n_components) if n_components is not None else None
         self._normalization = normalization
-        self._estimators = frozenset({"gaussian"} if estimators is None else set(estimators))
+        self._estimators = frozenset(selected_estimators)
         self._reg=reg
         self._means = {}
         self._covariances = {}
@@ -63,7 +73,7 @@ class FrequencyEstimator():
         X_dct = self.transform_to_dct(X)
 
         if self._n_components is not None:
-            X_dct = X_dct[:, :self._n_components]
+            X_dct = X_dct[:, :, :self._n_components]
 
         return X_dct
 
