@@ -85,8 +85,14 @@ class FrequencyEstimator():
         X_dct = self._prepare_features(X)
         y = np.asarray(y)
 
-        if len(X_dct) != len(y):
-            raise ValueError("Length of the dct features must be the same as the number of labels")
+        if y.ndim != 1:
+            raise ValueError("y must be a one-dimensional label array.")
+
+        if X_dct.shape[0] != len(y):
+            raise ValueError("X and y must contain the same number of samples.")
+
+        if len(y) == 0:
+            raise ValueError("Cannot fit on an empty dataset.")
 
         self._classes = np.unique(y)
 
