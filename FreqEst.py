@@ -24,60 +24,101 @@ class FrequencyEstimator():
         
         if length is not None: 
             if not isinstance(length, (int, float, np.integer, np.floating)) or length <= 0 or not np.isfinite(length):
-                raise TypeError("length must be a finite positive integer, float None!")
+                raise TypeError("length must be a finite positive integer, float None.")
         if n_components is not None:
             if not isinstance(n_components, (int, float)) or n_components <= 0 or not np.isfinite(n_components):
-                raise TypeError("n_components must be a finite positive number or None!")
+                raise TypeError("n_components must be a finite positive number or None.")
         if not isinstance(normalization, (bool, np.bool_)):
-            raise TypeError("normalization must be a boolean!")
+            raise TypeError("normalization must be a boolean.")
         if isinstance(reg, (bool, np.bool_)) or not np.isfinite(reg) or reg <= 0: 
-            raise ValueError("reg must be a finite positive number!")
+            raise ValueError("reg must be a finite positive number.")
         if estimators is None:
             selected_estimators = {"gaussian"}
         else:
             if not isinstance(estimators, (set, frozenset)):
-                raise TypeError("estimators must be a set or frozentset of strings!")
+                raise TypeError("estimators must be a set or frozentset of strings.")
             if not all(isinstance(estimator, str) for estimator in estimators):
-                raise TypeError("estimators must contain only strings!")
+                raise TypeError("estimators must contain only strings.")
             selected_estimators = set(estimators)
         unsupported_estimators = selected_estimators - self._ESTIMATORS
 
         if unsupported_estimators:
-            raise TypeError("Unsupported estimators!")
-
+            raise TypeError("Unsupported estimators.")
 
         self._length = int(length) if length is not None else None
         self._n_components = int(n_components) if n_components is not None else None
-        self._normalization = normalization
+        self._normalization = bool(normalization)
         self._estimators = frozenset(selected_estimators)
-        self._reg=reg
+        self._reg=float(reg)
+
         self._means = {}
         self._covariances = {}
         self._classes = None
+
+        self._class_priors = {}
+        self._parameters = {}
+        self._feature_names = None
+        self._n_features = None
+
+        self._n_coefficients = {} # each feature can have a different number of coefficients
 
     def transform_to_dct(self, X):
         signal = dct(X, axis=-1, n=self._length if self._length else None, type=2, norm='ortho' if self._normalization else None)
         return signal
 
-    def _prepare_features(self, X):
-        try:
-            X = np.asarray(X, dtype=float)
-        except (TypeError, ValueError) as e:
-            raise TypeError("X must contain numerical data.") from e
+    def _prepare_features(self, X, feature_order=None):
 
-        if X.ndim != 3:
-            raise ValueError("X must have shape\n(n_samples, n_features, signal_length)")
-        if any(size == 0 for size in X.shape):
-            raise ValueError("X must not contain empty dimensions.")
-        if not np.all(np.isfinite(X)):
-            raise ValueError("X must contain only finite values.")
+        if isinstance(X, dict):
+            if not X:
+                raise ValueError("X must contain at least one feature.")
+            raw_features = dict(X)
+        else:
+            try:
+                X = np.asarray(X, dtype=float)
+            except (TypeError, ValueError) as e:
+                raise TypeError("X must contain numerical data.") from e
+            if X.ndim != 3:
+                raise ValueError("Array input must have shape (n_samples, n_features, signal_length).\nDictionary values must have shape (n_samples, representation_length).")
+            if any(size == 0 for size in X.shape):
+                raise ValueError("X must not contain empty dimensions.")
+            if not np.all(np.isfinite(X)):
+                raise ValueError("X must contain only finite values.")
 
-        X_dct = self.transform_to_dct(X)
+            raw_features = {feature: X[:, feature, :] for feature in range(X.shape[1])}
 
-        if self._n_components is not None:
-            if self._n_components > X_dct.shape[-1]:
-                raise ValueError("n_components exceeds the available coefficient count.")
-            X_dct = X_dct[:, :, :self._n_components]
+        if feature_order is not None:
+            if (len(raw_features) != len(feature_order) or set(raw_features) != set(feature_order)):
+                raise ValueError("Prediction features must match the training feature names.")
+
+            raw_features = {feature: raw_features[feature] for feature in feature_order}
+
+        X_dct = {}
+        n_samples = None
+
+        for feature, values in raw_features.items():
+            try:
+                values = np.asarray(values, dtype=float)
+            except (TypeError, ValueError) as e:
+                raise TypeError(f"Feature {feature} must contain numerical data.") from e
+            if values.ndim != 2:
+                raise ValueError(f"Feature {feature} must have shape (n_samples, representation_length).")
+            if any(size == 0 for size in values.shape):
+                raise ValueError(f"Feature {feature} must not have empty dimensions.")
+            if not np.all(np.isfinite(values)):
+                raise ValueError(f"Feature {feature} must contain only finite values.")
+            if n_samples is None:
+                n_samples = values.shape[0]
+            elif values.shape[0] != n_samples:
+                raise ValueError("All features must contain the same number of samples.")
+
+            feature_dct = self.transform_to_dct(values)
+
+            if self._n_components is not None:
+                if self._n_components > feature_dct.shape[-1]:
+                    raise ValueError(f"n_components exceeds the available coefficient count for feature {feature}.")
+                feature_dct = feature_dct[:, :self._n_components]
+
+            X_dct[feature] = feature_dct
 
         return X_dct
 
@@ -87,9 +128,11 @@ class FrequencyEstimator():
         y = np.asarray(y)
 
         if y.ndim != 1:
-            raise ValueError("y must be a one-dimensional label array.")
+            raise ValueError("y must be a one-dimensional array.")
 
-        if X_dct.shape[0] != len(y):
+        n_samples = next(iter(X_dct.values())).shape[0]
+
+        if n_samples != len(y):
             raise ValueError("X and y must contain the same number of samples.")
 
         if len(y) == 0:
@@ -98,15 +141,15 @@ class FrequencyEstimator():
         self._classes, counts = np.unique(y, return_counts=True)
         self._class_priors = {c: np.log(count / len(y)) for c, count in zip(self._classes, counts)}
 
-        self._n_features = X_dct.shape[1]
-        self._n_coefficients = X_dct.shape[2]
-
+        self._feature_names = tuple(X_dct.keys())
+        self._n_features = len(self._feature_names)
+        self._n_coefficients = {feature: X_dct[feature].shape[1] for feature in self._feature_names}
         self._parameters = {estimator:{} for estimator in self._estimators}
 
         for estimator in self._estimators:
-            for feature in range(self._n_features):
+            for feature in self._feature_names:
                 self._parameters[estimator][feature] = {}
-                feature_data = X_dct[:, feature, :]
+                feature_data = X_dct[feature]
 
                 for c in self._classes:
 
@@ -116,9 +159,7 @@ class FrequencyEstimator():
 
                     if estimator == "gaussian":
                         centered = X_c - mean
-
                         covariance = (centered.T @ centered) / len(X_c)
-
                         parameters["covariance"] = covariance
 
                     elif estimator == "naive_bayes":
@@ -135,7 +176,7 @@ class FrequencyEstimator():
         covariance = parameters["covariance"] + self._reg * np.eye(len(mean))
         sign, logdet = np.linalg.slogdet(covariance)
         if sign <= 0:
-            raise np.linalg.LinAlgError("Regularized covariance is not positive definite.")
+            raise np.linalg.LinAlgError("Regularized covariance is not positive.")
         
         solved = np.linalg.solve(covariance, diff)
         quadratic = diff @ solved
@@ -143,23 +184,22 @@ class FrequencyEstimator():
         return log_likelihood
 
     def _naive_bayes_log_likelihood(self, x, parameters):
-        """Sum independent univariate Gaussian log-densities."""
         mean = parameters["mean"]
         variance = parameters["variance"] + self._reg
         log_likelihood = -0.5 * np.sum(np.log(2 * np.pi * variance) + (x - mean) ** 2 / variance)
         return log_likelihood
 
     def _estimator_log_scores(self, X_dct, estimator):
-        n_samples = X_dct.shape[0]
+        n_samples = next(iter(X_dct.values())).shape[0]
         n_classes = len(self._classes)
         scores = np.zeros((n_samples, n_classes))
 
-        for sample_index, sample in enumerate(X_dct):
+        for sample_index in range(n_samples):
             for class_index, c in enumerate(self._classes):
                 total = self._class_priors[c] # begin with class priors
 
-                for feature in range(self._n_features):
-                    x_feature = sample[feature]
+                for feature in self._feature_names:
+                    x_feature = X_dct[feature][sample_index]
                     parameters = self._parameters[estimator][feature][c]
 
                     if estimator == "gaussian":
@@ -182,12 +222,11 @@ class FrequencyEstimator():
         if self._classes is None:
             raise RuntimeError("Call fit() before prediction!")
 
-        X_dct = self._prepare_features(X)
+        X_dct = self._prepare_features(X, feature_order=self._feature_names)
 
-        if X_dct.shape[1] != self._n_features:
-            raise ValueError("Prediction data has a different number of features compared to the training data.")
-        if X_dct.shape[2] != self._n_coefficients:
-            raise ValueError("Prediction data has a different number of DCT coefficients compared to the training data.")
+        for feature in self._feature_names:
+            if X_dct[feature].shape[1] != self._n_coefficients[feature]:
+                raise ValueError(f"Feature {feature} has a different number DCT coefficients compared to training data.")
 
         estimator_probabilities = []
 
@@ -198,35 +237,40 @@ class FrequencyEstimator():
 
         return np.mean(estimator_probabilities, axis=0)
 
+    def predict_proba(self, X):
+        return self._predict_probabilities(X)
+
     def predict(self, X):
-
         probabilities = self._predict_probabilities(X)
-
         return self._classes[np.argmax(probabilities, axis=1)]
 
     def evaluate():
         pass
 
 
-X = np.asarray([
-    [
-        [1, 5, 8, 0, 13, -5, 4],   # feature 0
-        [2, 4, 7, 1, 12, -4, 3],   # feature 1
-    ],
-    [
-        [2, 4, 7, 1, 12, -4, 3],   # feature 0
-        [1, 5, 8, 0, 13, -5, 4],   # feature 1
-    ],
-    [
-        [8, 2, 1, 9, -2, 5, 0],    # feature 0
-        [3, 7, 2, 8, -1, 4, 6],    # feature 1
-    ],
-])
+X = {
+    "feature_0": np.asarray([
+        [1, 5, 8, 0, 13, -5, 4],
+        [2, 4, 7, 1, 12, -4, 3],
+        [8, 2, 1, 9, -2, 5, 0],
+    ]),
 
-X_test =  np.asarray([[
-    [1, 5, 8, 0, 13, -5, 4],
-    [2, 4, 7, 1, 12, -4, 3]
-]])
+    "feature_1": np.asarray([
+        [2, 4, 7, 1, 12, -4, 3],
+        [1, 5, 8, 0, 13, -5, 4],
+        [3, 7, 2, 8, -1, 4, 6],
+    ]),
+}
+
+X_test = {
+    "feature_0": np.asarray([
+        [1, 5, 8, 0, 13, -5, 4],
+    ]),
+
+    "feature_1": np.asarray([
+        [2, 4, 7, 1, 12, -4, 3],
+    ]),
+}
 
 y = np.asarray([
     "TRUE",
@@ -244,8 +288,4 @@ model.fit(X, y)
 
 print("Classes:", model._classes)
 print("Predictions:", model.predict(X_test))
-print("Probabilities:", model._predict_probabilities(X_test))
-
-prediction = model.predict(X_test)
-
-print(prediction)
+print("Probabilities:", model.predict_proba(X_test))
