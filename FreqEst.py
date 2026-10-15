@@ -64,6 +64,8 @@ class FrequencyEstimator():
 
     def transform_to_dct(self, X):
         signal = dct(X, axis=-1, n=self._length if self._length else None, type=2, norm='ortho' if self._normalization else None)
+        for axis in range(1, signal.ndim - 1):
+            signal = dct(X, axis=axis, n=self._length if self._length else None, type=2, norm='ortho' if self._normalization else None)
         return signal
 
     def _prepare_features(self, X, feature_order=None):
@@ -78,7 +80,7 @@ class FrequencyEstimator():
             except (TypeError, ValueError) as e:
                 raise TypeError("X must contain numerical data.") from e
             if X.ndim != 3:
-                raise ValueError("Array input must have shape (n_samples, n_features, signal_length).\nDictionary values must have shape (n_samples, representation_length).")
+                raise ValueError("Array input must have shape (n_samples, n_features, signal_length).\nFor other representation shapes, use a dictionary.")
             if any(size == 0 for size in X.shape):
                 raise ValueError("X must not contain empty dimensions.")
             if not np.all(np.isfinite(X)):
@@ -100,8 +102,8 @@ class FrequencyEstimator():
                 values = np.asarray(values, dtype=float)
             except (TypeError, ValueError) as e:
                 raise TypeError(f"Feature {feature} must contain numerical data.") from e
-            if values.ndim != 2:
-                raise ValueError(f"Feature {feature} must have shape (n_samples, representation_length).")
+            if values.ndim < 2:
+                raise ValueError(f"Feature {feature} must have shape (n_samples, representation dimensions).")
             if any(size == 0 for size in values.shape):
                 raise ValueError(f"Feature {feature} must not have empty dimensions.")
             if not np.all(np.isfinite(values)):
@@ -113,8 +115,10 @@ class FrequencyEstimator():
 
             feature_dct = self.transform_to_dct(values)
 
+            feature_dct = feature_dct.reshape(feature_dct.shape[0], -1) # convert back to 1D vector
+
             if self._n_components is not None:
-                if self._n_components > feature_dct.shape[-1]:
+                if self._n_components > feature_dct.shape[1]:
                     raise ValueError(f"n_components exceeds the available coefficient count for feature {feature}.")
                 feature_dct = feature_dct[:, :self._n_components]
 
