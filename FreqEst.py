@@ -248,9 +248,6 @@ class FrequencyEstimator():
         probabilities = self._predict_probabilities(X)
         return self._classes[np.argmax(probabilities, axis=1)]
 
-    def evaluate():
-        pass
-
 
 X = {
     "feature_0": np.asarray([
