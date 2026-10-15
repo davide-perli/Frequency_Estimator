@@ -1,5 +1,5 @@
-import numpy as np
-from sklearn.metrics import accuracy_score
+import numpy as np, pandas as pd
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
 from keras.datasets import cifar10
 from FreqEst import FrequencyEstimator
@@ -101,3 +101,33 @@ accuracy = accuracy_score(y_test, y_pred)
 
 print("Accuracy:", accuracy)
 print(f"Accuracy (%): {accuracy * 100:.2f}%")
+
+
+# ECG Heartbeat Categorization Dataset
+
+train = pd.read_csv("mitbih_train.csv", header=None).to_numpy()
+test = pd.read_csv("mitbih_test.csv", header=None).to_numpy()
+
+X_train = train[:, :-1].astype("float32")
+y_train = train[:, -1].astype(int)
+
+X_test = test[:, :-1].astype("float32")
+y_test = test[:, -1].astype(int)
+
+X_train = {"ecg": X_train[:, None, :]}
+X_test = {"ecg": X_test[:, None, :]}
+
+model = FrequencyEstimator(
+    length=187,
+    n_components=34,
+    normalization=True,
+    estimators={"gaussian"},
+    reg=0.04
+)
+
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+
+print("Accuracy:", accuracy_score(y_test, y_pred))
+print("Balanced accuracy:", balanced_accuracy_score(y_test, y_pred))
+print(classification_report(y_test, y_pred, zero_division=0))

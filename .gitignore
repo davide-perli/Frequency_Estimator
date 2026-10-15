@@ -1,3 +1,5 @@
 __pycache__/
 .vscode/
 classified_cookies.csv
+mitbih_test.csv
+mitbih_train.csv

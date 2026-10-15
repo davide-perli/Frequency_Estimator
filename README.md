@@ -322,7 +322,7 @@ python -m pytest -q
 
 ## Examples
 
-Some examples are presented in this Readme file, but there are 2 more in the [`example.py`](./example.py). A basic one and one using the CIFAR-10 dataset.
+Some examples are presented in this Readme file, but there are 3 more in the [`example.py`](./example.py). A basic numerical example, one using the CIFAR-10 dataset and the last one for classifying ECG from Kaggle [`link`](https://www.kaggle.com/datasets/shayanfazeli/heartbeat).
 
 ## Project layout
 
