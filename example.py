@@ -56,7 +56,7 @@ y_test = y_test.ravel()
 X_train, _, y_train, _ = train_test_split(
     X_train,
     y_train,
-    train_size=20000,
+    train_size=49000,
     stratify=y_train,
     random_state=42,
 )
@@ -87,10 +87,10 @@ X_test = {
 
 model = FrequencyEstimator(
     length=32,
-    n_components=28,
+    n_components=34,
     normalization=True,
     estimators={"gaussian"},
-    reg=0.040
+    reg=0.04
 )
 
 model.fit(X_train, y_train)

@@ -16,6 +16,31 @@ public class:
 from FreqEst import FrequencyEstimator
 ```
 
+## Table of contents
+
+- [Overview](#overview)
+- [Requirements](#requirements)
+- [Setup](#setup)
+  - [Windows PowerShell](#windows-powershell)
+  - [Linux or macOS](#linux-or-macos)
+- [Input format](#input-format)
+  - [Dictionary input (recommended)](#dictionary-input-recommended)
+  - [Three-dimensional array input](#three-dimensional-array-input)
+  - [Labels](#labels)
+- [`FrequencyEstimator` parameters](#frequencyestimator-parameters)
+  - [`length`](#length)
+  - [`n_components`](#n_components)
+  - [`normalization`](#normalization)
+  - [`estimators`](#estimators)
+  - [`reg`](#reg)
+- [Basic usage](#basic-usage)
+  - [Multiple representations](#multiple-representations)
+- [Transforming data manually](#transforming-data-manually)
+- [Running tests](#running-tests)
+- [Examples](#examples)
+- [Project layout](#project-layout)
+- [License](#license)
+
 ## Overview
 
 For each feature, `FrequencyEstimator`:
@@ -294,6 +319,10 @@ python -m pytest tests/test_numerical.py
 python -m pytest tests/test_validation.py
 python -m pytest -q
 ```
+
+## Examples
+
+Some examples are presented in this Readme file, but there are 2 more in the [`example.py`](./example.py). A basic one and one using the CIFAR-10 dataset.
 
 ## Project layout
 
