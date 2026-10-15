@@ -40,6 +40,8 @@ class FrequencyEstimator():
             if not all(isinstance(estimator, str) for estimator in estimators):
                 raise TypeError("estimators must contain only strings.")
             selected_estimators = set(estimators)
+        if not selected_estimators:
+            raise ValueError("At least one estimator must be selected.")
         unsupported_estimators = selected_estimators - self._ESTIMATORS
 
         if unsupported_estimators:
@@ -63,10 +65,30 @@ class FrequencyEstimator():
         self._n_coefficients = {} # each feature can have a different number of coefficients
 
     def transform_to_dct(self, X):
-        signal = dct(X, axis=-1, n=self._length if self._length else None, type=2, norm='ortho' if self._normalization else None)
-        for axis in range(1, signal.ndim - 1):
-            signal = dct(X, axis=axis, n=self._length if self._length else None, type=2, norm='ortho' if self._normalization else None)
+        signal = np.asarray(X, dtype=float)
+        for axis in range(1, signal.ndim):
+            signal = dct(signal, axis=axis, n=self._length if self._length else None, type=2, norm='ortho' if self._normalization else None)
         return signal
+
+    
+    def _select_dct_coefficients(self, feature_dct):
+        if self._n_components is None:
+            return feature_dct.reshape(feature_dct.shape[0], -1)
+
+        spatial_shape = feature_dct.shape[1:]
+
+        if self._n_components > np.prod(spatial_shape):
+            raise ValueError("n_components exceeds available coefficients.")
+
+        # Calculate each coefficient's squared frequency distance.
+        grids = np.meshgrid(*[np.arange(n) for n in spatial_shape], indexing="ij")
+        frequency = sum(grid**2 for grid in grids).ravel()
+
+        # Select the N lowest-frequency coefficients.
+        indices = np.argsort(frequency, kind="stable")[:self._n_components]
+
+        return feature_dct.reshape(feature_dct.shape[0], -1)[:, indices]
+
 
     def _prepare_features(self, X, feature_order=None):
 
@@ -114,13 +136,7 @@ class FrequencyEstimator():
                 raise ValueError("All features must contain the same number of samples.")
 
             feature_dct = self.transform_to_dct(values)
-
-            feature_dct = feature_dct.reshape(feature_dct.shape[0], -1) # convert back to 1D vector
-
-            if self._n_components is not None:
-                if self._n_components > feature_dct.shape[1]:
-                    raise ValueError(f"n_components exceeds the available coefficient count for feature {feature}.")
-                feature_dct = feature_dct[:, :self._n_components]
+            feature_dct = self._select_dct_coefficients(feature_dct)
 
             X_dct[feature] = feature_dct
 
@@ -247,46 +263,3 @@ class FrequencyEstimator():
     def predict(self, X):
         probabilities = self._predict_probabilities(X)
         return self._classes[np.argmax(probabilities, axis=1)]
-
-
-X = {
-    "feature_0": np.asarray([
-        [1, 5, 8, 0, 13, -5, 4],
-        [2, 4, 7, 1, 12, -4, 3],
-        [8, 2, 1, 9, -2, 5, 0],
-    ]),
-
-    "feature_1": np.asarray([
-        [2, 4, 7, 1, 12, -4, 3],
-        [1, 5, 8, 0, 13, -5, 4],
-        [3, 7, 2, 8, -1, 4, 6],
-    ]),
-}
-
-X_test = {
-    "feature_0": np.asarray([
-        [1, 5, 8, 0, 13, -5, 4],
-    ]),
-
-    "feature_1": np.asarray([
-        [2, 4, 7, 1, 12, -4, 3],
-    ]),
-}
-
-y = np.asarray([
-    "TRUE",
-    "TRUE",
-    "FALSE",
-])
-
-model = FrequencyEstimator(
-    length=7,
-    normalization=True,
-    estimators={"gaussian", "naive_bayes"}
-)
-
-model.fit(X, y)
-
-print("Classes:", model._classes)
-print("Predictions:", model.predict(X_test))
-print("Probabilities:", model.predict_proba(X_test))
