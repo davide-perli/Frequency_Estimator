@@ -11,6 +11,7 @@ class FrequencyEstimator():
         !!!Length is not the same with reduciton_rate. Length may shorten/pad input, while n_components reduces the resulted DCT signal
 
         n_components will reduce the DCT by a given number of points
+        frequency_selection decides which best n_components will be preserved (high or low)
         if a float value is passed it will be converted to an integer
 
         if normalization is set to true DCT will use norm='ortho'
@@ -20,7 +21,7 @@ class FrequencyEstimator():
 
     _ESTIMATORS = {"gaussian", "naive_bayes"}
 
-    def __init__(self, length=None, n_components=None, normalization=False, estimators = None, reg=1e-2):
+    def __init__(self, length=None, n_components=None, frequency_selection=None, normalization=False, estimators = None, reg=1e-2):
         
         if length is not None: 
             if not isinstance(length, (int, float, np.integer, np.floating)) or length <= 0 or not np.isfinite(length):
@@ -32,6 +33,13 @@ class FrequencyEstimator():
             raise TypeError("normalization must be a boolean.")
         if isinstance(reg, (bool, np.bool_)) or not np.isfinite(reg) or reg <= 0: 
             raise ValueError("reg must be a finite positive number.")
+        if frequency_selection is None:
+            frequency_selection = "low"
+        else:
+            if not isinstance(frequency_selection, str):
+                raise TypeError("frequency_selection must be a string.")
+            if frequency_selection not in("low", "high"):
+                raise TypeError("Unsupported frequency_selection. Only use None, low or high.")
         if estimators is None:
             selected_estimators = {"gaussian"}
         else:
@@ -49,6 +57,7 @@ class FrequencyEstimator():
 
         self._length = int(length) if length is not None else None
         self._n_components = int(n_components) if n_components is not None else None
+        self._frequency_selection = str(frequency_selection)
         self._normalization = bool(normalization)
         self._estimators = frozenset(selected_estimators)
         self._reg=float(reg)
@@ -85,7 +94,11 @@ class FrequencyEstimator():
         frequency = sum(grid**2 for grid in grids).ravel()
 
         # Select the N lowest-frequency coefficients.
-        indices = np.argsort(frequency, kind="stable")[:self._n_components]
+        if self._frequency_selection == "low":
+            indices = np.argsort(frequency, kind="stable")[:self._n_components]
+        # Select the N highest-frequency coefficients.
+        elif self._frequency_selection == "high":
+            indices = np.argsort(frequency, kind="stable")[-self._n_components:]
 
         return feature_dct.reshape(feature_dct.shape[0], -1)[:, indices]
 

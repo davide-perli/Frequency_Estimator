@@ -22,12 +22,39 @@ def make_model(**kwargs):
         {"reg": -1},
         {"reg": np.nan},
         {"estimators": {"unknown_estimator"}},
+        {"frequency_selection": 123},
+        {"frequency_selection": True},
+        {"frequency_selection": []},
+        {"frequency_selection": ["low", "high"]},
+        {"frequency_selection": ("low", "high")},
+        {"frequency_selection": {"low", "high"}},
+        {"frequency_selection": "medium"},
+        {"frequency_selection": ""},
+        {"frequency_selection": "LOW"},
     ],
 )
 def test_invalid_constructor_parameters(kwargs):
     with pytest.raises((TypeError, ValueError)):
         make_model(**kwargs)
+        
 
+@pytest.mark.parametrize("frequency_selection", ["low", "high"])
+def test_accepts_valid_frequency_selection(frequency_selection):
+    model = make_model(frequency_selection=frequency_selection)
+
+    assert model._frequency_selection == frequency_selection
+
+
+def test_frequency_selection_defaults_to_low():
+    model = make_model()
+
+    assert model._frequency_selection == "low"
+
+
+def test_frequency_selection_none_defaults_to_low():
+    model = make_model(frequency_selection=None)
+
+    assert model._frequency_selection == "low"
 
 def test_rejects_empty_feature_dictionary():
     model = make_model()

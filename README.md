@@ -30,6 +30,7 @@ from FreqEst import FrequencyEstimator
 - [`FrequencyEstimator` parameters](#frequencyestimator-parameters)
   - [`length`](#length)
   - [`n_components`](#n_components)
+  - [`frequency_selection`](#frequency_selection)
   - [`normalization`](#normalization)
   - [`estimators`](#estimators)
   - [`reg`](#reg)
@@ -151,6 +152,7 @@ sample counts, and incorrectly shaped labels are rejected.
 FrequencyEstimator(
     length=None,
     n_components=None,
+    frequency_selection=None,
     normalization=False,
     estimators=None,
     reg=1e-2,
@@ -176,10 +178,18 @@ original axis length.
 - Default: `None`
 
 The number of DCT coefficients retained for each feature. The coefficients
-with the lowest multidimensional frequency distance are selected, so this
+with the lowest/highest (depending on `frequency_selection` parameter) multidimensional frequency distance are selected, so this
 generally retains the low-frequency content. If `None`, all coefficients are
 kept. The value cannot exceed the number of available coefficients after the
 transform, and floating-point values are converted to integers.
+
+### `frequency_selection`
+
+- Type: string containing `"high"` or `"low"` or `None`
+- Default: `low`
+
+When `low`, keep the DCT coefficients with the lowest multidimensional frequency distance.
+When `high`, keep the DCT coefficients with the highest multidimensional frequency distance.
 
 ### `normalization`
 
