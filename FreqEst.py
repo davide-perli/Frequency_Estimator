@@ -19,7 +19,7 @@ class FrequencyEstimator():
         estimators can be one element or more. If more are passed the decission will be based on the average of each estimator. Defaul gaussian
     """
 
-    _ESTIMATORS = {"gaussian", "naive_bayes"}
+    _ESTIMATORS = {"gaussian", "fast_gaussian", "naive_bayes"}
 
     def __init__(self, length=None, n_components=None, frequency_selection=None, normalization=False, estimators = None, reg=1e-2):
         
@@ -195,6 +195,13 @@ class FrequencyEstimator():
                         covariance = (centered.T @ centered) / len(X_c)
                         parameters["covariance"] = covariance
 
+                    elif estimator == "fast_gaussian":
+                        centered = X_c - mean
+                        variance = np.mean(centered ** 2, axis=0) + self._reg
+
+                        parameters["variance"] = variance
+                        parameters["log_term"] = np.log(2 * np.pi * variance)
+
                     elif estimator == "naive_bayes":
                         variance = np.var(X_c, axis=0, ddof=0)
                         parameters["variance"] = variance
@@ -215,6 +222,13 @@ class FrequencyEstimator():
         quadratic = diff @ solved
         log_likelihood = -0.5 * (quadratic + logdet + len(mean) * np.log(2 * np.pi))
         return log_likelihood
+
+    def _fast_gaussian_log_likelihood(self, x, parameters):
+        mean = parameters["mean"]
+        variance = parameters["variance"]
+        log_term = parameters["log_term"]
+
+        return -0.5 * np.sum(log_term + (x - mean) ** 2 / variance)
 
     def _naive_bayes_log_likelihood(self, x, parameters):
         mean = parameters["mean"]
@@ -237,6 +251,8 @@ class FrequencyEstimator():
 
                     if estimator == "gaussian":
                         log_likelihood = self._gaussian_log_likelihood(x_feature, parameters)
+                    elif estimator == "fast_gaussian":
+                        log_likelihood = self._fast_gaussian_log_likelihood(x_feature, parameters)
                     else:
                         log_likelihood = self._naive_bayes_log_likelihood(x_feature, parameters)
 

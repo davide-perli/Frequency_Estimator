@@ -53,20 +53,11 @@ print("Probabilities:", model.predict_proba(X_test))
 y_train = y_train.ravel()
 y_test = y_test.ravel()
 
-X_train, _, y_train, _ = train_test_split(
+X_fit, X_val, y_fit, y_val = train_test_split(
     X_train,
     y_train,
-    train_size=49000,
+    test_size=0.1,
     stratify=y_train,
-    random_state=42,
-)
-
-
-X_test, _, y_test, _ = train_test_split(
-    X_test,
-    y_test,
-    train_size=1000,
-    stratify=y_test,
     random_state=42,
 )
 
@@ -87,11 +78,11 @@ X_test = {
 
 model = FrequencyEstimator(
     length=32,
-    n_components=34,
+    n_components=50,
     frequency_selection="low",
-    normalization=True,
+    normalization=False,
     estimators={"gaussian"},
-    reg=0.04
+    reg=1e-2
 )
 
 model.fit(X_train, y_train)
@@ -100,9 +91,11 @@ y_pred = model.predict(X_test)
 
 accuracy = accuracy_score(y_test, y_pred)
 
-print("Accuracy:", accuracy)
 print(f"Accuracy (%): {accuracy * 100:.2f}%")
+print("Balanced accuracy:", balanced_accuracy_score(y_test, y_pred))
 
+# Accuracy (%): 44.26%
+# Balanced accuracy: 0.4426
 
 # ECG Heartbeat Categorization Dataset
 
@@ -120,16 +113,17 @@ X_test = {"ecg": X_test[:, None, :]}
 
 model = FrequencyEstimator(
     length=187,
-    n_components=34,
-    frequency_selection="high",
     normalization=True,
-    estimators={"gaussian"},
-    reg=0.04
+    estimators={"naive_bayes"},
+    reg=0.27
+
+    # Accuracy: 0.5032888726475425
+    # Balanced accuracy: 0.48380102404681813
 )
 
-model.fit(X_train, y_train)
-y_pred = model.predict(X_test)
+# model.fit(X_train, y_train)
+# y_pred = model.predict(X_test)
 
-print("Accuracy:", accuracy_score(y_test, y_pred))
-print("Balanced accuracy:", balanced_accuracy_score(y_test, y_pred))
-print(classification_report(y_test, y_pred, zero_division=0))
+# print("Accuracy:", accuracy_score(y_test, y_pred))
+# print("Balanced accuracy:", balanced_accuracy_score(y_test, y_pred))
+# print(classification_report(y_test, y_pred, zero_division=0))

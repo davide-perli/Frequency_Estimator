@@ -201,14 +201,15 @@ When `False`, the unnormalized type-II DCT is used.
 
 ### `estimators`
 
-- Type: a non-empty `set` or `frozenset` containing `"gaussian"` and/or
+- Type: a non-empty `set` or `frozenset` containing `"gaussian"`/`"fast_gaussian"` and/or
   `"naive_bayes"`
 - Default: `{"gaussian"}`
 
 `"gaussian"` uses a full covariance matrix for each feature and class.
+`"fast_gaussian"` doesn't calculate covaraince matrix and uses only the variance which means the model ignores correlations between DCT coefficients
 `"naive_bayes"` uses independent coefficient variances (a diagonal
-covariance). If both are selected, the model calculates probabilities with
-both estimators and averages the resulting probability matrices.
+covariance). If both(`"gaussian"`/`"fast_gaussian"` and `"naive_bayes"`) are selected, the model calculates probabilities with
+both estimators and averages the resulting probability matrices. Techically all 3 can be chosen, although having both `"gaussian"` and `"fast_gaussian"` is not recommended since either the DCT coefficients are correlated or not.
 
 ### `reg`
 
