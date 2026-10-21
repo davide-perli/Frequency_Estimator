@@ -1,4 +1,5 @@
 import numpy as np, pandas as pd
+from skimage.feature import hog
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
 from keras.datasets import cifar10
@@ -48,21 +49,13 @@ print("Probabilities:", model.predict_proba(X_test))
 
 
 # CIFAR-10 example
-(X_train, y_train), (X_test, y_test) = cifar10.load_data()
+(X_train_raw, y_train_raw), (X_test_raw, y_test_raw) = cifar10.load_data()
 
-y_train = y_train.ravel()
-y_test = y_test.ravel()
+y_train_raw = y_train_raw.ravel()
+y_test_raw = y_test_raw.ravel()
 
-X_fit, X_val, y_fit, y_val = train_test_split(
-    X_train,
-    y_train,
-    test_size=0.1,
-    stratify=y_train,
-    random_state=42,
-)
-
-X_train = X_train.astype(np.float32) / 255.0
-X_test = X_test.astype(np.float32) / 255.0
+X_train = X_train_raw.astype(np.float32) / 255.0
+X_test = X_test_raw.astype(np.float32) / 255.0
 
 X_train = {
     "red": X_train[..., 0],
@@ -85,17 +78,56 @@ model = FrequencyEstimator(
     reg=1e-2
 )
 
-model.fit(X_train, y_train)
+model.fit(X_train, y_train_raw)
 
 y_pred = model.predict(X_test)
 
-accuracy = accuracy_score(y_test, y_pred)
+accuracy = accuracy_score(y_test_raw, y_pred)
 
 print(f"Accuracy (%): {accuracy * 100:.2f}%")
-print("Balanced accuracy:", balanced_accuracy_score(y_test, y_pred))
+print("Balanced accuracy:", balanced_accuracy_score(y_test_raw, y_pred))
 
 # Accuracy (%): 44.26%
 # Balanced accuracy: 0.4426
+
+# CIFAR-10 WITH HISTOGRAM REPRESENTATION
+
+def extract_hog(images):
+    features = []
+
+    for image in images:
+        image = image.astype(np.float32) / 255.0
+
+        feat = hog(
+            image,
+            orientations=9,
+            pixels_per_cell=(8, 8),
+            cells_per_block=(2, 2),
+            channel_axis=-1,
+        )
+        features.append(feat)
+
+    return {"hog": np.asarray(features, dtype=np.float32)}
+
+X_train_hog = extract_hog(X_train_raw)
+X_test_hog = extract_hog(X_test_raw)
+
+model = FrequencyEstimator(
+    length=None,
+    n_components=None,
+    normalization=True,
+    estimators={"gaussian"},
+    reg=1e-3,
+)
+
+model.fit(X_train_hog, y_train_raw)
+
+pred = model.predict(X_test_hog)
+print(f"HOG Accuracy: {accuracy_score(y_test_raw, pred) * 100:.2f}")
+print("HOG Balanced accuracy:", balanced_accuracy_score(y_test_raw, pred))
+
+# HOG Accuracy: 55.02
+# HOG Balanced accuracy: 0.5502
 
 # ECG Heartbeat Categorization Dataset
 
