@@ -333,7 +333,7 @@ python -m pytest -q
 
 ## Examples
 
-Some examples are presented in this Readme file, but there are 3 more in the [`example.py`](./example.py). A basic numerical example, one using the CIFAR-10 dataset and the last one for classifying ECG from Kaggle [`link`](https://www.kaggle.com/datasets/shayanfazeli/heartbeat).
+Some examples are presented in this Readme file, but there are 3 more in the [`example.py`](./example.py). A basic numerical example, one using the CIFAR-10 dataset (2 versions: one where the features are just the R, G, B channels and one using HOG, the difference between them being of over 10% which means that feature representation is very important for the model) and the last one for classifying ECG from Kaggle [`link`](https://www.kaggle.com/datasets/shayanfazeli/heartbeat).
 
 ## Project layout
 
